@@ -2,7 +2,7 @@
 <html lang="en">
 	<head>
 		<meta charset="UTF-8" />
-		<title>SyncWatch: Video Party</title>
+		<title>SyncWatch: Production Ready</title>
 		<style>
 			body {
 				font-family: 'Segoe UI', sans-serif;
@@ -34,12 +34,13 @@
 				outline: none;
 			}
 			button {
-				padding: 12px 20px;
+				padding: 10px 15px;
 				cursor: pointer;
 				border-radius: 4px;
 				border: none;
 				font-weight: bold;
 				transition: 0.2s;
+				font-size: 0.9em;
 			}
 			#loadBtn {
 				background: #e50914;
@@ -85,7 +86,7 @@
 				background: #000;
 				display: flex;
 				gap: 10px;
-				height: 160px;
+				height: 140px;
 				border-bottom: 1px solid #333;
 			}
 			.cam-box {
@@ -103,6 +104,7 @@
 				width: 100%;
 				height: 100%;
 				object-fit: cover;
+				transform: scaleX(-1); /* Mirror effect */
 			}
 			.cam-label {
 				position: absolute;
@@ -119,19 +121,28 @@
 			#controls {
 				padding: 15px;
 				border-bottom: 1px solid #333;
-				text-align: center;
 				display: flex;
-				flex-direction: column;
-				gap: 8px;
+				gap: 10px;
+				justify-content: center;
 			}
-			#camBtn {
-				width: 100%;
+			.media-btn {
+				flex: 1;
 				background: #333;
 				color: #ccc;
-				padding: 12px;
+				display: flex;
+				align-items: center;
+				justify-content: center;
+				gap: 5px;
 			}
-			#camBtn.active {
+			.media-btn:hover {
+				background: #444;
+			}
+			.media-btn.active {
 				background: #2ecc71;
+				color: black;
+			}
+			.media-btn.off {
+				background: #e74c3c;
 				color: white;
 			}
 
@@ -235,10 +246,27 @@
 
 				<div id="controls">
 					<button
-						id="camBtn"
-						onclick="toggleMedia()"
+						id="joinBtn"
+						style="width: 100%; background: #007bff"
+						onclick="startCall()"
 					>
-						🎥 Start Camera & Mic
+						📞 Join Call
+					</button>
+					<button
+						id="camBtn"
+						class="media-btn active"
+						style="display: none"
+						onclick="toggleVideo()"
+					>
+						🎥 Cam On
+					</button>
+					<button
+						id="micBtn"
+						class="media-btn active"
+						style="display: none"
+						onclick="toggleAudio()"
+					>
+						🎤 Mic On
 					</button>
 				</div>
 
@@ -261,29 +289,37 @@
 			const socket = io();
 			let myName = prompt('Enter your name:', 'Guest') || 'Guest';
 
-			// --- 1. PEERJS CONFIGURATION ---
-			// Automatically detect if we are on localhost:3000 OR ngrok/render (port 80/443)
+			// --- 1. PEERJS CONFIGURATION (THE FIREWALL FIX) ---
+			// We added "iceServers" which are free Google servers to punch through firewalls
 			const myPeer = new Peer(undefined, {
 				path: '/peerjs',
 				host: '/',
 				port: location.port || (location.protocol === 'https:' ? 443 : 80),
+				config: {
+					iceServers: [
+						{ url: 'stun:stun.l.google.com:19302' },
+						{ url: 'stun:stun1.l.google.com:19302' },
+						{ url: 'stun:stun2.l.google.com:19302' },
+					],
+				},
 			});
 
 			// --- 2. WEBCAM LOGIC ---
 			let localStream;
-			const camBtn = document.getElementById('camBtn');
 			const localVideo = document.getElementById('localVideo');
 			const remoteVideo = document.getElementById('remoteVideo');
+			const joinBtn = document.getElementById('joinBtn');
+			const camBtn = document.getElementById('camBtn');
+			const micBtn = document.getElementById('micBtn');
 
-			// Handle incoming calls
+			// Initial setup to handle incoming calls
 			myPeer.on('call', (call) => {
-				call.answer(localStream); // Answer with our stream
+				call.answer(localStream);
 				call.on('stream', (userVideoStream) => {
 					remoteVideo.srcObject = userVideoStream;
 				});
 			});
 
-			// Listen for new users
 			socket.on('user-connected', (peerId) => {
 				if (localStream) connectToNewUser(peerId, localStream);
 			});
@@ -292,26 +328,58 @@
 				console.log('My Peer ID:', id);
 			});
 
-			function toggleMedia() {
-				if (localStream) {
-					// Stop
-					localStream.getTracks().forEach((track) => track.stop());
-					localStream = null;
-					localVideo.srcObject = null;
-					camBtn.innerText = '🎥 Start Camera & Mic';
+			// A. Start the connection
+			function startCall() {
+				navigator.mediaDevices
+					.getUserMedia({ audio: true, video: true })
+					.then((stream) => {
+						localStream = stream;
+						localVideo.srcObject = stream;
+
+						// Show controls, hide join button
+						joinBtn.style.display = 'none';
+						camBtn.style.display = 'flex';
+						micBtn.style.display = 'flex';
+
+						// Connect to server
+						socket.emit('join-room', myPeer.id);
+					})
+					.catch((err) => {
+						alert('Please allow Camera/Mic access. Error: ' + err);
+					});
+			}
+
+			// B. Toggle Camera
+			function toggleVideo() {
+				if (!localStream) return;
+				const videoTrack = localStream.getVideoTracks()[0];
+				if (videoTrack.enabled) {
+					videoTrack.enabled = false;
+					camBtn.innerText = '📷 Cam Off';
 					camBtn.classList.remove('active');
+					camBtn.classList.add('off');
 				} else {
-					// Start
-					navigator.mediaDevices
-						.getUserMedia({ audio: true, video: true })
-						.then((stream) => {
-							localStream = stream;
-							localVideo.srcObject = stream;
-							camBtn.innerText = '🔴 End Call';
-							camBtn.classList.add('active');
-							socket.emit('join-room', myPeer.id);
-						})
-						.catch((err) => alert('Camera Error: ' + err));
+					videoTrack.enabled = true;
+					camBtn.innerText = '🎥 Cam On';
+					camBtn.classList.remove('off');
+					camBtn.classList.add('active');
+				}
+			}
+
+			// C. Toggle Mic
+			function toggleAudio() {
+				if (!localStream) return;
+				const audioTrack = localStream.getAudioTracks()[0];
+				if (audioTrack.enabled) {
+					audioTrack.enabled = false;
+					micBtn.innerText = '🔇 Mic Off';
+					micBtn.classList.remove('active');
+					micBtn.classList.add('off');
+				} else {
+					audioTrack.enabled = true;
+					micBtn.innerText = '🎤 Mic On';
+					micBtn.classList.remove('off');
+					micBtn.classList.add('active');
 				}
 			}
 
@@ -399,17 +467,13 @@
 				chatWindow.scrollTop = chatWindow.scrollHeight;
 			});
 
-			// --- 5. HEARTBEAT (ANTI-SLEEP) ---
-			// This pokes the server every 5 minutes to prevent it from sleeping
+			// --- 5. HEARTBEAT ---
 			setInterval(
 				() => {
-					if (socket.connected) {
-						socket.emit('heartbeat');
-						console.log('💓 Sent heartbeat to keep server awake');
-					}
+					if (socket.connected) socket.emit('heartbeat');
 				},
 				5 * 60 * 1000,
-			); // 5 Minutes
+			);
 		</script>
 	</body>
 </html>
