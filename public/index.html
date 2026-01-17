@@ -2,7 +2,7 @@
 <html lang="en">
 	<head>
 		<meta charset="UTF-8" />
-		<title>SyncWatch: Video Call</title>
+		<title>SyncWatch: Video Party</title>
 		<style>
 			body {
 				font-family: 'Segoe UI', sans-serif;
@@ -261,8 +261,8 @@
 			const socket = io();
 			let myName = prompt('Enter your name:', 'Guest') || 'Guest';
 
-			// --- 1. PEERJS CONFIGURATION (THE FIX) ---
-			// Automatically detect if we are on localhost:3000 OR ngrok (port 80/443)
+			// --- 1. PEERJS CONFIGURATION ---
+			// Automatically detect if we are on localhost:3000 OR ngrok/render (port 80/443)
 			const myPeer = new Peer(undefined, {
 				path: '/peerjs',
 				host: '/',
@@ -275,22 +275,16 @@
 			const localVideo = document.getElementById('localVideo');
 			const remoteVideo = document.getElementById('remoteVideo');
 
-			// A. Handle incoming calls (When friend calls you)
+			// Handle incoming calls
 			myPeer.on('call', (call) => {
-				console.log('Receiving call...');
-				// Answer the call with our stream (if we have one)
-				call.answer(localStream);
-
-				// Listen for their stream
+				call.answer(localStream); // Answer with our stream
 				call.on('stream', (userVideoStream) => {
-					console.log("Received friend's stream");
 					remoteVideo.srcObject = userVideoStream;
 				});
 			});
 
-			// B. Listen for new users to call them
+			// Listen for new users
 			socket.on('user-connected', (peerId) => {
-				console.log('User connected: ' + peerId);
 				if (localStream) connectToNewUser(peerId, localStream);
 			});
 
@@ -315,8 +309,6 @@
 							localVideo.srcObject = stream;
 							camBtn.innerText = '🔴 End Call';
 							camBtn.classList.add('active');
-
-							// Tell server we are ready
 							socket.emit('join-room', myPeer.id);
 						})
 						.catch((err) => alert('Camera Error: ' + err));
@@ -324,7 +316,6 @@
 			}
 
 			function connectToNewUser(peerId, stream) {
-				console.log('Calling friend: ' + peerId);
 				const call = myPeer.call(peerId, stream);
 				call.on('stream', (userVideoStream) => {
 					remoteVideo.srcObject = userVideoStream;
@@ -407,6 +398,18 @@
 				chatWindow.appendChild(div);
 				chatWindow.scrollTop = chatWindow.scrollHeight;
 			});
+
+			// --- 5. HEARTBEAT (ANTI-SLEEP) ---
+			// This pokes the server every 5 minutes to prevent it from sleeping
+			setInterval(
+				() => {
+					if (socket.connected) {
+						socket.emit('heartbeat');
+						console.log('💓 Sent heartbeat to keep server awake');
+					}
+				},
+				5 * 60 * 1000,
+			); // 5 Minutes
 		</script>
 	</body>
 </html>
