@@ -4,9 +4,9 @@
 		<meta charset="UTF-8" />
 		<meta
 			name="viewport"
-			content="width=device-width, initial-scale=1.0"
+			content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"
 		/>
-		<title>SyncWatch: Audio Fixed</title>
+		<title>SyncWatch: Mobile Optimized</title>
 		<style>
 			/* Base Reset */
 			body {
@@ -124,7 +124,7 @@
 				border: 1px solid #444;
 			}
 
-			/* Local video is mirrored, Remote is normal */
+			/* Mirror Local, Normal Remote */
 			#localVideo {
 				width: 100%;
 				height: 100%;
@@ -148,27 +148,26 @@
 				z-index: 5;
 			}
 
-			/* The Audio Fix Button */
+			/* Audio Fix Overlay */
 			#unmuteOverlay {
 				position: absolute;
 				top: 0;
 				left: 0;
 				width: 100%;
 				height: 100%;
-				background: rgba(0, 0, 0, 0.6);
-				display: none; /* Hidden by default */
+				background: rgba(192, 57, 43, 0.8);
+				display: none; /* Red background to grab attention */
 				justify-content: center;
 				align-items: center;
 				cursor: pointer;
 				z-index: 10;
+				flex-direction: column;
+				text-align: center;
 			}
-			#unmuteBtn {
-				background: #e74c3c;
-				color: white;
-				padding: 5px 10px;
-				border-radius: 4px;
-				font-size: 0.8em;
-				border: none;
+			#unmuteOverlay span {
+				font-weight: bold;
+				font-size: 0.9em;
+				padding: 5px;
 			}
 
 			/* Controls */
@@ -183,11 +182,11 @@
 				grid-column: span 2;
 				background: #007bff;
 				color: white;
-				padding: 12px;
+				padding: 15px;
 				border: none;
 				border-radius: 4px;
 				font-weight: bold;
-				font-size: 1rem;
+				font-size: 1.1rem;
 			}
 			.btn-toggle {
 				padding: 12px;
@@ -294,7 +293,10 @@
 							id="unmuteOverlay"
 							onclick="fixAudio()"
 						>
-							<button id="unmuteBtn">🔊 Tap to Unmute</button>
+							<span>🔇 Sound Blocked</span>
+							<span style="font-size: 0.8em; opacity: 0.8"
+								>Tap to Hear Friend</span
+							>
 						</div>
 						<video
 							id="remoteVideo"
@@ -368,10 +370,21 @@
 			const remoteVideo = document.getElementById('remoteVideo');
 			const unmuteOverlay = document.getElementById('unmuteOverlay');
 
-			// --- CALL LOGIC ---
+			// --- 1. OPTIMIZED CALL LOGIC (Fixes Slow Mobile Video) ---
 			function joinCall() {
+				// FIX: We specifically ask for Low Resolution
+				// This makes the video load instantly on mobile networks
+				const constraints = {
+					audio: true,
+					video: {
+						width: { ideal: 320 }, // Low Res
+						height: { ideal: 240 },
+						frameRate: { ideal: 15 }, // Low FPS
+					},
+				};
+
 				navigator.mediaDevices
-					.getUserMedia({ audio: true, video: true })
+					.getUserMedia(constraints)
 					.then((stream) => {
 						localStream = stream;
 						localVideo.srcObject = stream;
@@ -386,27 +399,26 @@
 					.catch((err) => alert('Error accessing Camera/Mic: ' + err));
 			}
 
-			// --- HANDLING INCOMING VIDEO/AUDIO ---
+			// --- 2. AUDIO UNLOCKER (Fixes Mobile Sound) ---
 			function handleIncomingStream(stream) {
 				remoteVideo.srcObject = stream;
 
-				// 1. FORCE UNMUTE
+				// Force settings
 				remoteVideo.muted = false;
 				remoteVideo.volume = 1.0;
+				remoteVideo.playsInline = true; // Crucial for iPhone
 
-				// 2. ATTEMPT PLAY
 				const playPromise = remoteVideo.play();
 				if (playPromise !== undefined) {
 					playPromise.catch((error) => {
-						console.log('Auto-play was prevented by browser.');
-						// Show the "Tap to Unmute" button if browser blocked audio
-						unmuteOverlay.style.display = 'flex';
+						console.log('Audio blocked by browser policy. User must tap.');
+						unmuteOverlay.style.display = 'flex'; // Show Red Overlay
 					});
 				}
 			}
 
-			// Helper to manually fix audio if blocked
 			function fixAudio() {
+				// This function runs when user taps the Red Overlay
 				remoteVideo.play();
 				remoteVideo.muted = false;
 				remoteVideo.volume = 1.0;
