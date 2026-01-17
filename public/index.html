@@ -6,7 +6,7 @@
 			name="viewport"
 			content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"
 		/>
-		<title>SyncWatch: Mobile Optimized</title>
+		<title>SyncWatch: Final</title>
 		<style>
 			/* Base Reset */
 			body {
@@ -20,7 +20,6 @@
 				overflow: hidden;
 			}
 
-			/* Navbar */
 			#navbar {
 				padding: 10px;
 				background: #1a1a1a;
@@ -49,14 +48,12 @@
 				white-space: nowrap;
 			}
 
-			/* Responsive Layout */
 			#content {
 				display: flex;
 				flex: 1;
 				height: calc(100vh - 60px);
 			}
 
-			/* Video Player */
 			#video-container {
 				flex: 3;
 				background: #000;
@@ -66,13 +63,35 @@
 				position: relative;
 				min-width: 0;
 			}
+			/* Make video fill space but preserve aspect ratio */
 			#mainVideo {
 				width: 100%;
-				max-height: 100%;
+				height: 100%;
+				object-fit: contain;
 				outline: none;
 			}
 
-			/* Sidebar */
+			/* LOADING SPINNER */
+			#video-loader {
+				position: absolute;
+				width: 50px;
+				height: 50px;
+				border: 5px solid rgba(255, 255, 255, 0.3);
+				border-radius: 50%;
+				border-top: 5px solid #e50914;
+				animation: spin 1s linear infinite;
+				display: none;
+				z-index: 5;
+			}
+			@keyframes spin {
+				0% {
+					transform: rotate(0deg);
+				}
+				100% {
+					transform: rotate(360deg);
+				}
+			}
+
 			#sidebar {
 				flex: 1;
 				min-width: 300px;
@@ -83,7 +102,6 @@
 				border-left: 1px solid #333;
 			}
 
-			/* MOBILE OVERRIDES */
 			@media (max-width: 768px) {
 				#content {
 					flex-direction: column;
@@ -106,7 +124,6 @@
 				}
 			}
 
-			/* Webcam Section */
 			#webcam-area {
 				padding: 10px;
 				background: #111;
@@ -123,8 +140,6 @@
 				position: relative;
 				border: 1px solid #444;
 			}
-
-			/* Mirror Local, Normal Remote */
 			#localVideo {
 				width: 100%;
 				height: 100%;
@@ -136,7 +151,6 @@
 				height: 100%;
 				object-fit: cover;
 			}
-
 			.cam-label {
 				position: absolute;
 				bottom: 4px;
@@ -148,15 +162,14 @@
 				z-index: 5;
 			}
 
-			/* Audio Fix Overlay */
 			#unmuteOverlay {
 				position: absolute;
 				top: 0;
 				left: 0;
 				width: 100%;
 				height: 100%;
-				background: rgba(192, 57, 43, 0.8);
-				display: none; /* Red background to grab attention */
+				background: rgba(192, 57, 43, 0.85);
+				display: none;
 				justify-content: center;
 				align-items: center;
 				cursor: pointer;
@@ -170,7 +183,6 @@
 				padding: 5px;
 			}
 
-			/* Controls */
 			#controls {
 				padding: 10px;
 				display: grid;
@@ -205,7 +217,6 @@
 				color: #fff;
 			}
 
-			/* Chat */
 			#chat-window {
 				flex: 1;
 				min-height: 200px;
@@ -269,11 +280,13 @@
 
 		<div id="content">
 			<div id="video-container">
+				<div id="video-loader"></div>
 				<div id="status-msg">Synced</div>
 				<video
 					id="mainVideo"
 					controls
 					playsinline
+					preload="auto"
 				></video>
 			</div>
 
@@ -369,17 +382,15 @@
 			const localVideo = document.getElementById('localVideo');
 			const remoteVideo = document.getElementById('remoteVideo');
 			const unmuteOverlay = document.getElementById('unmuteOverlay');
+			const loader = document.getElementById('video-loader');
 
-			// --- 1. OPTIMIZED CALL LOGIC (Fixes Slow Mobile Video) ---
 			function joinCall() {
-				// FIX: We specifically ask for Low Resolution
-				// This makes the video load instantly on mobile networks
 				const constraints = {
 					audio: true,
 					video: {
-						width: { ideal: 320 }, // Low Res
+						width: { ideal: 320 },
 						height: { ideal: 240 },
-						frameRate: { ideal: 15 }, // Low FPS
+						frameRate: { ideal: 15 },
 					},
 				};
 
@@ -388,44 +399,35 @@
 					.then((stream) => {
 						localStream = stream;
 						localVideo.srcObject = stream;
-
-						// Show controls
 						joinBtn.style.display = 'none';
 						camToggle.style.display = 'block';
 						micToggle.style.display = 'block';
-
 						socket.emit('join-room', myPeer.id);
 					})
-					.catch((err) => alert('Error accessing Camera/Mic: ' + err));
+					.catch((err) => alert('Error: ' + err));
 			}
 
-			// --- 2. AUDIO UNLOCKER (Fixes Mobile Sound) ---
 			function handleIncomingStream(stream) {
 				remoteVideo.srcObject = stream;
-
-				// Force settings
 				remoteVideo.muted = false;
 				remoteVideo.volume = 1.0;
-				remoteVideo.playsInline = true; // Crucial for iPhone
+				remoteVideo.playsInline = true;
 
 				const playPromise = remoteVideo.play();
 				if (playPromise !== undefined) {
 					playPromise.catch((error) => {
-						console.log('Audio blocked by browser policy. User must tap.');
-						unmuteOverlay.style.display = 'flex'; // Show Red Overlay
+						unmuteOverlay.style.display = 'flex';
 					});
 				}
 			}
 
 			function fixAudio() {
-				// This function runs when user taps the Red Overlay
 				remoteVideo.play();
 				remoteVideo.muted = false;
 				remoteVideo.volume = 1.0;
 				unmuteOverlay.style.display = 'none';
 			}
 
-			// Peer Events
 			myPeer.on('call', (call) => {
 				call.answer(localStream);
 				call.on('stream', (stream) => handleIncomingStream(stream));
@@ -438,7 +440,6 @@
 				}
 			});
 
-			// --- TOGGLES ---
 			function toggleCam() {
 				if (!localStream) return;
 				const track = localStream.getVideoTracks()[0];
@@ -474,9 +475,21 @@
 				if (url) socket.emit('change-video', url);
 			}
 
+			// SPINNER LOGIC
+			video.onwaiting = () => {
+				loader.style.display = 'block';
+			};
+			video.onplaying = () => {
+				loader.style.display = 'none';
+			};
+			video.oncanplay = () => {
+				loader.style.display = 'none';
+			};
+
 			socket.on('update-video', (url) => {
 				video.src = url;
 				urlInput.value = url;
+				loader.style.display = 'block'; // Show spinner immediately on load
 				showStatus('Loaded');
 			});
 
@@ -514,7 +527,6 @@
 				setTimeout(() => (statusMsg.style.opacity = 0), 1500);
 			}
 
-			// --- CHAT ---
 			const chatWindow = document.getElementById('chat-window');
 			function handleChat(e) {
 				if (e.key === 'Enter') {
