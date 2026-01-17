@@ -6,7 +6,7 @@
 			name="viewport"
 			content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"
 		/>
-		<title>SyncWatch: Final</title>
+		<title>SyncWatch: Stable</title>
 		<style>
 			/* Base Reset */
 			body {
@@ -63,33 +63,12 @@
 				position: relative;
 				min-width: 0;
 			}
-			/* Make video fill space but preserve aspect ratio */
+			/* Reliable CSS for Raw Player */
 			#mainVideo {
 				width: 100%;
 				height: 100%;
 				object-fit: contain;
 				outline: none;
-			}
-
-			/* LOADING SPINNER */
-			#video-loader {
-				position: absolute;
-				width: 50px;
-				height: 50px;
-				border: 5px solid rgba(255, 255, 255, 0.3);
-				border-radius: 50%;
-				border-top: 5px solid #e50914;
-				animation: spin 1s linear infinite;
-				display: none;
-				z-index: 5;
-			}
-			@keyframes spin {
-				0% {
-					transform: rotate(0deg);
-				}
-				100% {
-					transform: rotate(360deg);
-				}
 			}
 
 			#sidebar {
@@ -140,6 +119,8 @@
 				position: relative;
 				border: 1px solid #444;
 			}
+
+			/* Mirror Local, Normal Remote */
 			#localVideo {
 				width: 100%;
 				height: 100%;
@@ -151,6 +132,7 @@
 				height: 100%;
 				object-fit: cover;
 			}
+
 			.cam-label {
 				position: absolute;
 				bottom: 4px;
@@ -162,13 +144,14 @@
 				z-index: 5;
 			}
 
+			/* The Red Audio Fix Overlay */
 			#unmuteOverlay {
 				position: absolute;
 				top: 0;
 				left: 0;
 				width: 100%;
 				height: 100%;
-				background: rgba(192, 57, 43, 0.85);
+				background: rgba(192, 57, 43, 0.9);
 				display: none;
 				justify-content: center;
 				align-items: center;
@@ -252,6 +235,7 @@
 			#status-msg {
 				position: absolute;
 				top: 10px;
+				right: 10px;
 				background: rgba(0, 0, 0, 0.8);
 				padding: 5px 15px;
 				border-radius: 20px;
@@ -280,7 +264,6 @@
 
 		<div id="content">
 			<div id="video-container">
-				<div id="video-loader"></div>
 				<div id="status-msg">Synced</div>
 				<video
 					id="mainVideo"
@@ -382,9 +365,9 @@
 			const localVideo = document.getElementById('localVideo');
 			const remoteVideo = document.getElementById('remoteVideo');
 			const unmuteOverlay = document.getElementById('unmuteOverlay');
-			const loader = document.getElementById('video-loader');
 
 			function joinCall() {
+				// Low Resolution for Fast Mobile Loading
 				const constraints = {
 					audio: true,
 					video: {
@@ -409,6 +392,7 @@
 
 			function handleIncomingStream(stream) {
 				remoteVideo.srcObject = stream;
+				// Force Audio ON
 				remoteVideo.muted = false;
 				remoteVideo.volume = 1.0;
 				remoteVideo.playsInline = true;
@@ -416,6 +400,7 @@
 				const playPromise = remoteVideo.play();
 				if (playPromise !== undefined) {
 					playPromise.catch((error) => {
+						// If browser blocks audio, show RED BUTTON
 						unmuteOverlay.style.display = 'flex';
 					});
 				}
@@ -475,21 +460,9 @@
 				if (url) socket.emit('change-video', url);
 			}
 
-			// SPINNER LOGIC
-			video.onwaiting = () => {
-				loader.style.display = 'block';
-			};
-			video.onplaying = () => {
-				loader.style.display = 'none';
-			};
-			video.oncanplay = () => {
-				loader.style.display = 'none';
-			};
-
 			socket.on('update-video', (url) => {
 				video.src = url;
 				urlInput.value = url;
-				loader.style.display = 'block'; // Show spinner immediately on load
 				showStatus('Loaded');
 			});
 
@@ -511,6 +484,7 @@
 				isSyncing = true;
 				if (Math.abs(video.currentTime - data.time) > 0.5)
 					video.currentTime = data.time;
+
 				if (data.type === 'play') {
 					video.play().catch(() => {});
 					showStatus('Playing');
